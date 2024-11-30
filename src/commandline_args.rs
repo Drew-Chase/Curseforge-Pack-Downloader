@@ -14,7 +14,7 @@ pub struct CommandlineArgs {
     #[arg(short, long, default_value = "output")]
     pub output: Option<String>,
 
-    /// This will only download serverside mods
-    #[arg(long)]
-    pub server_only: bool,
+//     This will only download serverside mods
+//    #[arg(long)]
+//    pub server_only: bool,
 }
