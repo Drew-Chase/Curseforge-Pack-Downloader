@@ -12,11 +12,12 @@ mod pack_manifest;
 #[tokio::main]
 async fn main() {
     let start_time = std::time::SystemTime::now();
+    let args = CommandlineArgs::parse();
+
     std::env::set_var("RUST_LOG", "info");
     env_logger::init();
     info!("Starting unfuck-curseforge");
     warn!("This tool is not affiliated with CurseForge in any way, in fact we strongly dislike curseforge's bullshit!");
-    let args = CommandlineArgs::parse();
 
     if args.id.is_none() && args.file.is_none() {
         error!("You must specify a url or file to download");
@@ -40,13 +41,14 @@ async fn main() {
         file = Some(PathBuf::from(file_string));
     }
     if let Some(file) = file {
-        let (tmp, manifest) = match pack_archive::process_archive(file).await {
+        let (tmp, manifest) = match pack_archive::process_archive(file, args.parallel_downloads, args.validate,args.validate_if_size_less_than).await {
             Ok(output) => output,
             Err(err) => {
                 error!("Unable to process the pack archive: {}", err);
                 exit(1);
             }
         };
+
 
         let mods = tmp.join("mods");
         let overrides = tmp.join("overrides");
