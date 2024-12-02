@@ -45,7 +45,7 @@ impl Manifest {
         Ok(manifest)
     }
 
-    pub async fn download_mods(&self, directory: impl AsRef<Path>) -> Result<(), Box<dyn Error>> {
-        crate::curseforge_api::download_mods_from_manifest(self, directory).await
+    pub async fn download_mods(&self, directory: impl AsRef<Path>, parallel: u8, validate:bool, validate_if_size_less_than: Option<u64>) -> Result<(), Box<dyn Error>> {
+        crate::curseforge_api::download_mods_from_manifest(self, directory, parallel,validate, validate_if_size_less_than).await
     }
 }
