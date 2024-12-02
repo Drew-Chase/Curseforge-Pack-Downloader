@@ -1,6 +1,6 @@
 use crate::pack_manifest::Manifest;
 use futures::future;
-use log::{error, info};
+use log::{error, info, warn};
 use reqwest::header::HeaderMap;
 use serde_json::Value;
 use std::error::Error;
@@ -56,25 +56,41 @@ pub async fn download_latest_pack_archive(project_id: u64) -> Result<PathBuf, Bo
 pub async fn download_mods_from_manifest(
     manifest: &Manifest,
     directory: impl AsRef<Path>,
+    parallel: u8,
+    validate: bool,
+    validate_if_size_less_than: Option<u64>,
 ) -> Result<(), Box<dyn Error>> {
     info!("Downloading mods from manifest");
     create_dir_all(&directory)?;
+    // Downloads x at a time, where x is parallel
+    let file_chunks =
+        manifest
+            .files
+            .chunks(if parallel == 0 || parallel > manifest.files.len() as u8 {
+                manifest.files.len()
+            } else {
+                parallel as usize
+            });
+    for file_chunk in file_chunks {
+        let download_tasks = file_chunk
+            .iter()
+            .map(|file| {
+                download_mod(
+                    file.project_id as u64,
+                    file.file_id as u64,
+                    directory.as_ref(),
+                    validate,
+                    validate_if_size_less_than,
+                )
+            })
+            .collect::<Vec<_>>();
 
-    // Collect all download tasks into a vector
-    let download_tasks = manifest
-        .files
-        .iter()
-        .map(|file| {
-            download_mod(
-                file.project_id as u64,
-                file.file_id as u64,
-                directory.as_ref(),
-            )
-        })
-        .collect::<Vec<_>>();
+        warn!("Waiting for downloads to complete...");
 
-    // Await all tasks to complete
-    future::join_all(download_tasks).await;
+        // Await all tasks to complete
+        future::join_all(download_tasks).await;
+        info!("Downloads complete!");
+    }
 
     Ok(())
 }
@@ -83,7 +99,10 @@ async fn download_mod(
     project_id: u64,
     file_id: u64,
     directory: impl AsRef<Path>,
+    validate: bool,
+    validate_if_size_less_than: Option<u64>,
 ) -> Result<PathBuf, Box<dyn Error>> {
+    let validate_if_size_less_than = validate_if_size_less_than.unwrap_or(0);
     let client = reqwest::Client::new();
     let mut headers: HeaderMap = HeaderMap::new();
     headers.insert("x-api-key", API_KEY.parse().unwrap());
@@ -110,18 +129,20 @@ async fn download_mod(
         "Response does not contain 'data'"
     })?;
 
-    let donwload_value = data.get("downloadUrl").ok_or_else(|| {
+    let download_value = data.get("downloadUrl").ok_or_else(|| {
         error!("No 'downloadUrl' in response data");
         "No 'downloadUrl' in response data"
     })?;
 
-    let download_url: String = if donwload_value.is_null() {
+    let denied_api_access = download_value.is_null();
+
+    let download_url: String = if denied_api_access {
         get_no_api_download_url(
             file_id,
             data.get("fileName").unwrap().as_str().unwrap().to_string(),
         )?
     } else {
-        donwload_value.as_str().unwrap().to_string()
+        download_value.as_str().unwrap().to_string()
     };
 
     let file_name = data
@@ -166,10 +187,60 @@ async fn download_mod(
         "Failed to write to file"
     })?;
 
+    if validate && file_path.metadata()?.len() <= validate_if_size_less_than {
+        if denied_api_access {
+            error!(
+                "Unable to validate file '{}', API access was denied!",
+                file_name
+            );
+        } else {
+            warn!("Validating {}...", file_name);
+            let hashes = data
+                .get("hashes")
+                .ok_or_else(|| {
+                    error!("No 'hashes' in response data");
+                    "No 'hashes' in response data"
+                })?
+                .as_array()
+                .ok_or_else(|| {
+                    error!("'hashes' is not an array");
+                    "'hashes' is not an array"
+                })?;
+
+            let md5_hash = hashes
+                .iter()
+                .find(|hash| hash.get("algo").unwrap().as_u64().unwrap() == 2)
+                .ok_or_else(|| {
+                    error!("No MD5 hash in response data");
+                    "No MD5 hash in response data"
+                })?
+                .get("value")
+                .ok_or_else(|| {
+                    error!("No 'value' in MD5 hash");
+                    "No 'value' in MD5 hash"
+                })?
+                .as_str()
+                .ok_or_else(|| {
+                    error!("MD5 hash is not a string");
+                    "MD5 hash is not a string"
+                })?;
+
+            if !validate_file(&file_path, md5_hash)? {
+                error!("File '{}' failed validation!", file_name);
+                return Err("File failed validation".into());
+            }
+            info!("File '{}' passed validation!", file_name);
+        }
+    }
+
     Ok(file_path)
 }
 
 fn get_no_api_download_url(file_id: u64, file_name: String) -> Result<String, Box<dyn Error>> {
+    warn!(
+        "API access denied for '{}', falling back to no-api download url",
+        file_name
+    );
     let file_id = modify_id(file_id);
     Ok(format!(
         "https://mediafilez.forgecdn.net/files/{}/{}",
@@ -187,4 +258,27 @@ fn modify_id(id: u64) -> String {
         &remaining
     };
     format!("{}/{}", first_part, remaining)
+}
+
+use md5::{Digest, Md5};
+use std::io::{self, Read};
+
+fn validate_file(file_path: impl AsRef<Path>, hash: impl AsRef<str>) -> Result<bool, io::Error> {
+    let mut file = File::open(file_path)?;
+    let mut hasher = Md5::new();
+    let mut buffer = [0u8; 4096];
+
+    loop {
+        let bytes_read = file.read(&mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+
+    let calculated_hash = bytes_to_hex_string(&hasher.finalize());
+    Ok(calculated_hash == hash.as_ref())
+}
+fn bytes_to_hex_string(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{:02x}", byte)).collect()
 }
