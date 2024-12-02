@@ -8,6 +8,8 @@ mod commandline_args;
 mod curseforge_api;
 mod pack_archive;
 mod pack_manifest;
+mod mod_type;
+mod project_structure;
 
 #[tokio::main]
 async fn main() {
