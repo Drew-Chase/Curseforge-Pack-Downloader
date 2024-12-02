@@ -1,6 +1,6 @@
 use crate::mod_file::ModFileResponse;
 use crate::mod_type::ModTypeExt;
-use crate::pack_manifest::{Manifest, ModItem};
+use crate::pack_manifest::Manifest;
 use crate::project_structure::ProjectItem;
 use futures::future;
 use log::{error, info, warn};
