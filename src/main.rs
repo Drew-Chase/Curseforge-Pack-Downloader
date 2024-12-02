@@ -10,6 +10,7 @@ mod pack_archive;
 mod pack_manifest;
 mod mod_type;
 mod project_structure;
+mod mod_file;
 
 #[tokio::main]
 async fn main() {
@@ -56,7 +57,7 @@ async fn main() {
         let overrides = tmp.join("overrides");
 
         if let Some(output_path) = args.output {
-            let output_path = PathBuf::from(output_path).join(format!(
+            let output_path = output_path.join(format!(
                 "{}-{}",
                 manifest.name,
                 std::time::SystemTime::now()
