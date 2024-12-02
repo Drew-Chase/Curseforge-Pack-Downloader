@@ -24,9 +24,14 @@ pub async fn process_archive(
         error!("Manifest file not found!");
         std::process::exit(1);
     }
+    
+    println!("-> {:?}", path);
 
     let manifest = Manifest::new(manifest_file)?;
-    if let Err(e) = manifest.download_mods(&path, parallel, validate,validate_if_size_less_than).await {
+    if let Err(e) = manifest
+        .download_mods(&path, parallel, validate, validate_if_size_less_than)
+        .await
+    {
         if remove_dir(path).is_err() {
             error!("Failed to remove mods directory after failure");
         }
