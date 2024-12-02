@@ -8,6 +8,9 @@ use std::path::{Path, PathBuf};
 
 pub async fn process_archive(
     zip_path: impl AsRef<Path>,
+    parallel: u8,
+    validate: bool,
+    validate_if_size_less_than: Option<u64>,
 ) -> Result<(PathBuf, Manifest), Box<dyn Error>> {
     let path = match extract_zip(zip_path) {
         Ok(path) => path,
@@ -24,7 +27,7 @@ pub async fn process_archive(
     }
 
     let manifest = Manifest::new(manifest_file)?;
-    if let Err(e) = manifest.download_mods(&mods_dir).await {
+    if let Err(e) = manifest.download_mods(&mods_dir, parallel, validate,validate_if_size_less_than).await {
         if remove_dir(mods_dir).is_err() {
             error!("Failed to remove mods directory after failure");
         }
