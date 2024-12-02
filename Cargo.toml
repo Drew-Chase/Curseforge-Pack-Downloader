@@ -1,7 +1,8 @@
 [package]
 name = "unfuck-curseforge"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
+build = "build.rs"  # Add this line
 
 [dependencies]
 log = "0.4.22"
