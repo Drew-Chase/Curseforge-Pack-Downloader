@@ -1,3 +1,4 @@
+use std::path::{Path, PathBuf};
 use clap::Parser;
 
 #[derive(Parser, Debug, Clone)]
@@ -12,7 +13,7 @@ pub struct CommandlineArgs {
 
     /// This is the output zip path
     #[arg(short, long, default_value = "./")]
-    pub output: Option<String>,
+    pub output: Option<PathBuf>,
 
     /// This will validate the downloaded mods based on the provided hash. (Note: this can take significantly longer)
     #[arg(long)]
