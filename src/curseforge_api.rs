@@ -1,9 +1,12 @@
-use crate::pack_manifest::Manifest;
+use crate::mod_file::ModFileResponse;
+use crate::mod_type::ModTypeExt;
+use crate::pack_manifest::{Manifest, ModItem};
 use crate::project_structure::ProjectItem;
 use futures::future;
 use log::{error, info, warn};
 use md5::{Digest, Md5};
 use reqwest::header::HeaderMap;
+use reqwest::Client;
 use serde_json::Value;
 use std::error::Error;
 use std::fs::{create_dir_all, File};
@@ -12,13 +15,12 @@ use std::io::{self, Read};
 use std::iter::Map;
 use std::path::{Path, PathBuf};
 use uri_encode::encode_uri_component;
-use crate::mod_type::ModTypeExt;
 
 const API_KEY: &str = r#"$2a$10$qD2UJdpHaeDaQyGGaGS0QeoDnKq2EC7sX6YSjOxYHtDZSQRg04BCG"#;
 
 pub async fn download_latest_pack_archive(project_id: u64) -> Result<PathBuf, Box<dyn Error>> {
     info!("Downloading the latest pack version");
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let mut headers: HeaderMap = HeaderMap::new();
     headers.insert("x-api-key", API_KEY.parse().unwrap());
 
@@ -67,6 +69,7 @@ pub async fn download_mods_from_manifest(
     validate_if_size_less_than: Option<u64>,
 ) -> Result<(), Box<dyn Error>> {
     info!("Downloading mods from manifest");
+    println!("-> {:?}", directory.as_ref());
     create_dir_all(&directory)?;
     // Downloads x at a time, where x is parallel
     let file_chunks =
@@ -78,6 +81,7 @@ pub async fn download_mods_from_manifest(
                 parallel as usize
             });
     for file_chunk in file_chunks {
+        info!("Downloading {} mods...", file_chunk.len());
         let download_tasks = file_chunk
             .iter()
             .map(|file| {
@@ -109,14 +113,10 @@ async fn download_mod(
     validate_if_size_less_than: Option<u64>,
 ) -> Result<PathBuf, Box<dyn Error>> {
     let validate_if_size_less_than = validate_if_size_less_than.unwrap_or(0);
-    let mut headers: HeaderMap = HeaderMap::new();
-    headers.insert("x-api-key", API_KEY.parse().unwrap());
-    let project = get_project(project_id).await?.data;
-    let file_item = project
-        .latest_files
-        .iter()
-        .find(|e| e.id == file_id as i64)
-        .unwrap();
+    let client = Client::new();
+    let project = get_project(project_id, &client).await?.data;
+    let file_item = get_mod_item(project_id, file_id, &client).await?.data;
+
     let denied_api_access = file_item.download_url.is_none();
 
     let file_name = file_item.file_name.clone();
@@ -128,15 +128,18 @@ async fn download_mod(
             "No 'downloadUrl' in response data"
         })?
     };
-    
+
     let directory = directory.as_ref();
-    
+
     let directory = directory.join(project.class_id.to_path());
     create_dir_all(&directory).map_err(|err| {
-        error!("Failed to create directory {}: {}", directory.display(), err);
+        error!(
+            "Failed to create directory {}: {}",
+            directory.display(),
+            err
+        );
         "Failed to create directory"
     })?;
-    
 
     let file_path = directory.join(Path::new(&file_name));
 
@@ -243,8 +246,7 @@ fn bytes_to_hex_string(bytes: &[u8]) -> String {
     Map::collect(bytes.iter().map(|byte| format!("{:02x}", byte)))
 }
 
-pub async fn get_project(project_id: u64) -> Result<ProjectItem, Box<dyn Error>> {
-    let client = reqwest::Client::new();
+pub async fn get_project(project_id: u64, client: &Client) -> Result<ProjectItem, Box<dyn Error>> {
     let mut headers: HeaderMap = HeaderMap::new();
     headers.insert("x-api-key", API_KEY.parse().unwrap());
     let request = client
@@ -252,5 +254,23 @@ pub async fn get_project(project_id: u64) -> Result<ProjectItem, Box<dyn Error>>
         .headers(headers);
     let response = request.send().await?;
     let data: ProjectItem = response.json().await?;
+    Ok(data)
+}
+
+async fn get_mod_item(
+    project_id: u64,
+    file_id: u64,
+    client: &Client,
+) -> Result<ModFileResponse, Box<dyn Error>> {
+    let mut headers: HeaderMap = HeaderMap::new();
+    headers.insert("x-api-key", API_KEY.parse().unwrap());
+    let request = client
+        .get(format!(
+            "https://api.curseforge.com/v1/mods/{}/{}",
+            project_id, file_id
+        ))
+        .headers(headers);
+    let response = request.send().await?;
+    let data: ModFileResponse = response.json().await?;
     Ok(data)
 }
