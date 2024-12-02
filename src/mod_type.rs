@@ -56,30 +56,10 @@ impl Serialize for ModType {
 }
 
 pub trait ModTypeExt {
-    fn is_mod(&self) -> bool;
-    fn is_resource_pack(&self) -> bool;
-    fn is_shader_pack(&self) -> bool;
-    fn is_mod_pack(&self) -> bool;
     fn to_path(&self) -> PathBuf;
 }
 
 impl ModTypeExt for ModType {
-    fn is_mod(&self) -> bool {
-        matches!(self, ModType::Mod)
-    }
-
-    fn is_resource_pack(&self) -> bool {
-        matches!(self, ModType::ResourcePack)
-    }
-
-    fn is_shader_pack(&self) -> bool {
-        matches!(self, ModType::ShaderPack)
-    }
-
-    fn is_mod_pack(&self) -> bool {
-        matches!(self, ModType::ModPack)
-    }
-
     fn to_path(&self) -> PathBuf {
         match self {
             ModType::Mod => PathBuf::from("mods"),
