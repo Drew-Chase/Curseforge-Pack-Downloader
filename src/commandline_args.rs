@@ -1,5 +1,5 @@
-use std::path::{Path, PathBuf};
 use clap::Parser;
+use std::path::PathBuf;
 
 #[derive(Parser, Debug, Clone)]
 pub struct CommandlineArgs {
@@ -22,7 +22,7 @@ pub struct CommandlineArgs {
     /// The number of mods that will be downloaded in parallel
     /// This can allow for much faster downloading.
     /// Higher may not be better, due to internet speeds.
-    #[arg(short, long, default_value_t = 16, value_name="NUMBER")]
+    #[arg(short, long, default_value_t = 16, value_name = "NUMBER")]
     pub parallel_downloads: u8,
 
     /// This will only attempt to validate files where the file size is less than this value (in bytes)
