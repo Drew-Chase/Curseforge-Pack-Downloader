@@ -19,7 +19,6 @@ pub async fn process_archive(
             std::process::exit(1);
         }
     };
-    let mods_dir = path.join("mods");
     let manifest_file = path.join("manifest.json");
     if !manifest_file.exists() {
         error!("Manifest file not found!");
@@ -27,8 +26,8 @@ pub async fn process_archive(
     }
 
     let manifest = Manifest::new(manifest_file)?;
-    if let Err(e) = manifest.download_mods(&mods_dir, parallel, validate,validate_if_size_less_than).await {
-        if remove_dir(mods_dir).is_err() {
+    if let Err(e) = manifest.download_mods(&path, parallel, validate,validate_if_size_less_than).await {
+        if remove_dir(path).is_err() {
             error!("Failed to remove mods directory after failure");
         }
         error!("Failed to download mods: {}", e);
