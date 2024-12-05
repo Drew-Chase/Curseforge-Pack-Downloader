@@ -1,3 +1,4 @@
+use crate::curseforge_api::ModDownloadProgressResponse;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::path::Path;
@@ -12,30 +13,11 @@ pub struct ModItem {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ModLoaderItem {
-    pub id: String,
-    pub primary: bool,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Minecraft {
-    pub version: String,
-    #[serde(rename = "modLoaders")]
-    pub mod_loaders: Vec<ModLoaderItem>,
-}
-
-#[derive(Serialize, Deserialize)]
 pub struct Manifest {
-    pub minecraft: Minecraft,
-    #[serde(rename = "manifestType")]
-    pub manifest_type: String,
-    #[serde(rename = "manifestVersion")]
-    pub manifest_version: i64,
     pub name: String,
-    pub version: String,
-    pub author: String,
+    pub version: Option<String>,
+    pub author: Option<String>,
     pub files: Vec<ModItem>,
-    pub overrides: String,
 }
 
 impl Manifest {
@@ -75,9 +57,27 @@ impl Manifest {
     ///
     /// * `Ok(())` if mods were successfully downloaded.
     /// * `Err` if there was an error during the download or validation process.
-    pub async fn download_mods(&self, directory: impl AsRef<Path>, parallel: u8, validate: bool, validate_if_size_less_than: Option<u64>) -> Result<(), Box<dyn Error>> {
+    pub async fn download_mods<F>(
+        &self,
+        directory: impl AsRef<Path>,
+        parallel: u8,
+        validate: bool,
+        validate_if_size_less_than: Option<u64>,
+        on_progress: F,
+    ) -> Result<(), Box<dyn Error>>
+    where
+        F: FnMut(ModDownloadProgressResponse) + 'static + Send + Sync,
+    {
         // Call the function to download mods based on the current manifest.
         // This operation is performed asynchronously.
-        crate::curseforge_api::download_mods_from_manifest(self, directory, parallel, validate, validate_if_size_less_than).await
+        crate::curseforge_api::download_mods_from_manifest(
+            self,
+            directory,
+            parallel,
+            validate,
+            validate_if_size_less_than,
+            on_progress,
+        )
+        .await
     }
 }
