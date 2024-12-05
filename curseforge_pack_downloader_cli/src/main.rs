@@ -8,6 +8,8 @@ use clap::Parser;
 use curseforge_pack_downloader::CurseforgePackDownloader;
 use log::{error, info, warn};
 use std::env::set_var;
+use std::ffi::OsStr;
+use std::path::PathBuf;
 use std::process::exit;
 
 mod commandline_args;
@@ -26,7 +28,7 @@ async fn main() {
     env_logger::init();
 
     // Log starting information about the tool
-    info!("Starting unfuck-curseforge");
+    info!("Starting Curseforge Pack Downloader");
     warn!("This tool is not affiliated with CurseForge in any way, in fact we strongly dislike curseforge's bullshit!");
 
     // Attempt to read environment variables from the embedded env.ini file
@@ -49,6 +51,7 @@ async fn main() {
     // Set downloader options based on input arguments
     downloader.set_validate(args.validate);
     downloader.set_parallel_downloads(args.parallel_downloads);
+    downloader.set_output_directory(args.output);
 
     // Set validation size limit if provided and validation is enabled
     if let Some(validate_if_less_than_bytes) = args.validate_if_size_less_than {
@@ -57,9 +60,29 @@ async fn main() {
 
     // Determine processing path based on input ID or file
     match if let Some(id) = args.id {
-        downloader.process_id(id).await
+        downloader.set_temp_directory(format!(
+            "{}-{}.temp",
+            id,
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap_or_else(|_| std::time::Duration::new(0, 0))
+                .as_millis()
+        ));
+        downloader.process_id(id, |_| {}).await
     } else if let Some(file) = args.file {
-        downloader.process_file(file).await
+        downloader.set_temp_directory(format!(
+            "{}-{}.temp",
+            PathBuf::from(&file)
+                .file_name()
+                .unwrap_or(OsStr::new("unknown"))
+                .to_str()
+                .unwrap_or("unknown"),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap_or_else(|_| std::time::Duration::new(0, 0))
+                .as_millis()
+        ));
+        downloader.process_file(file, |_| {}).await
     } else {
         // Log an error if neither an ID nor a file is specified and exit
         error!("You must specify a url or file to download");
