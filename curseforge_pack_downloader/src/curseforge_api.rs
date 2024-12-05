@@ -1,5 +1,5 @@
 use crate::mod_file::ModFileResponse;
-use crate::mod_type::ModTypeExt;
+use crate::mod_type::{ModType, ModTypeExt};
 use crate::pack_manifest::Manifest;
 use crate::project_structure::ProjectItem;
 use futures::future;
@@ -16,6 +16,11 @@ use std::iter::Map;
 use std::path::{Path, PathBuf};
 use uri_encode::encode_uri_component;
 
+pub struct ModDownloadProgressResponse {
+    pub downloaded: u32,
+    pub total: u32,
+}
+
 /// Macro to parse the CURSEFORGE_API_KEY from environment variables.
 ///
 /// This macro attempts to retrieve the API key from the environment, parse it,
@@ -23,7 +28,10 @@ use uri_encode::encode_uri_component;
 /// the parsed API key.
 macro_rules! header_parsed_api_key {
     () => {
-        match std::env::var("CURSEFORGE_API_KEY").unwrap_or("".to_string()).parse() {
+        match std::env::var("CURSEFORGE_API_KEY")
+            .unwrap_or("".to_string())
+            .parse()
+        {
             Ok(key) => key, // Return the parsed API key if successful
             Err(err) => {
                 // Log an error message if parsing fails
@@ -36,9 +44,9 @@ macro_rules! header_parsed_api_key {
 
 /// Downloads the latest version archive of a mod pack given a project ID.
 ///
-/// This asynchronous function queries the CurseForge API for the latest 
-/// mod pack files associated with the specified project ID. It then 
-/// downloads the file and stores it in a temporary directory, returning 
+/// This asynchronous function queries the CurseForge API for the latest
+/// mod pack files associated with the specified project ID. It then
+/// downloads the file and stores it in a temporary directory, returning
 /// the path to the downloaded file.
 ///
 /// # Arguments
@@ -47,7 +55,7 @@ macro_rules! header_parsed_api_key {
 ///
 /// # Returns
 ///
-/// A `Result` containing the `PathBuf` to the downloaded file if successful, 
+/// A `Result` containing the `PathBuf` to the downloaded file if successful,
 /// or a boxed error if any operation fails.
 ///
 /// # Errors
@@ -64,7 +72,10 @@ macro_rules! header_parsed_api_key {
 /// let path = download_latest_pack_archive(123456).await?;
 /// println!("Downloaded to: {:?}", path);
 /// ```
-pub async fn download_latest_pack_archive(project_id: u64) -> Result<PathBuf, Box<dyn Error>> {
+pub async fn download_latest_pack_archive(
+    project_id: u64,
+    temp_dir: impl AsRef<Path>,
+) -> Result<PathBuf, Box<dyn Error>> {
     info!("Downloading the latest pack version");
 
     // Create a new HTTP client instance
@@ -92,15 +103,17 @@ pub async fn download_latest_pack_archive(project_id: u64) -> Result<PathBuf, Bo
     };
 
     // Extract the 'data' field from the response JSON
-    let data: Vec<Value> = response.get("data")
-                                   .ok_or("Missing 'data' field in response")?
+    let data: Vec<Value> = response
+        .get("data")
+        .ok_or("Missing 'data' field in response")?
         .as_array()
         .ok_or("'data' field is not an array")?
         .to_vec();
 
     // Retrieve the first file in the 'data' array as the latest file
-    let latest_file: Value = data.first()
-                                 .ok_or("No files found in 'data' array")?
+    let latest_file: Value = data
+        .first()
+        .ok_or("No files found in 'data' array")?
         .clone();
 
     // Extract the download URL and file name from the latest file
@@ -117,9 +130,11 @@ pub async fn download_latest_pack_archive(project_id: u64) -> Result<PathBuf, Bo
         .as_str()
         .ok_or("'fileName' is not a string")?
         .to_string();
+    
+    create_dir_all(temp_dir.as_ref())?;
 
     // Determine the path to save the downloaded file
-    let file_path = std::env::temp_dir().join(file_name);
+    let file_path = temp_dir.as_ref().join(file_name);
 
     // Create the file and write the downloaded content to it
     let mut file = File::create(&file_path)?;
@@ -144,47 +159,68 @@ pub async fn download_latest_pack_archive(project_id: u64) -> Result<PathBuf, Bo
 /// # Returns
 ///
 /// A Result that is Ok if successful, or an error if any download or IO operation fails.
-pub async fn download_mods_from_manifest(
+pub async fn download_mods_from_manifest<F>(
     manifest: &Manifest,
     directory: impl AsRef<Path>,
     parallel: u8,
     validate: bool,
     validate_if_size_less_than: Option<u64>,
-) -> Result<(), Box<dyn Error>> {
+    mut on_progress: F,
+) -> Result<(), Box<dyn Error>>
+where
+    F: FnMut(ModDownloadProgressResponse) + 'static + Send + Sync,
+{
     info!("Downloading mods from manifest");
-    println!("-> {:?}", directory.as_ref());
+
+    let directory = directory.as_ref().join("overrides");
 
     // Create the directory if it does not exist
     create_dir_all(&directory)?;
 
     // Determine the number of file chunks based on the parallel parameter
-    let file_chunks = manifest.files.chunks(
-        if parallel == 0 || parallel > manifest.files.len() as u8 {
-            manifest.files.len()
-        } else {
-            parallel as usize
-        }
-    );
+    let file_chunks =
+        manifest
+            .files
+            .chunks(if parallel == 0 || parallel > manifest.files.len() as u8 {
+                manifest.files.len()
+            } else {
+                parallel as usize
+            });
+
+    let total_mods_count = manifest.files.len() as u32;
+    let mut mods_downloaded_count = 0u32;
 
     // Download each chunk of files
     for file_chunk in file_chunks {
-        info!("Downloading {} mods...", file_chunk.len());
-
         // Map each file in the chunk to a download task
-        let download_tasks = file_chunk.iter().map(|file| {
-            download_mod(
-                file.project_id as u64,
-                file.file_id as u64,
-                directory.as_ref(),
-                validate,
-                validate_if_size_less_than,
-            )
-        }).collect::<Vec<_>>();
+        let download_tasks = file_chunk
+            .iter()
+            .map(|file| async {
+                match download_mod(
+                    file.project_id as u64,
+                    file.file_id as u64,
+                    directory.clone(),
+                    validate,
+                    validate_if_size_less_than,
+                )
+                .await
+                {
+                    Ok(_) => (),
+                    Err(err) => {
+                        error!("Failed to download mod: {}", err);
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
 
         warn!("Waiting for downloads to complete...");
         // Wait for all download tasks to complete before continuing
         future::join_all(download_tasks).await;
-        info!("Downloads complete!");
+        mods_downloaded_count += file_chunk.len() as u32;
+        on_progress(ModDownloadProgressResponse {
+            downloaded: mods_downloaded_count,
+            total: total_mods_count,
+        });
     }
 
     Ok(())
@@ -236,7 +272,7 @@ async fn download_mod(
     let directory = directory.as_ref();
 
     // Construct the full directory path based on the project class ID
-    let directory = directory.join(project.class_id.to_path());
+    let directory = directory.join(project.class_id.unwrap_or(ModType::Mod).to_path());
     create_dir_all(&directory).map_err(|err| {
         error!(
             "Failed to create directory {}: {}",
@@ -287,10 +323,14 @@ async fn download_mod(
             );
         } else {
             warn!("Validating {}...", file_name);
-            let md5_hash = file_item.hashes.iter().find(|e| e.algo == 2).ok_or_else(|| {
-                error!("No MD5 hash in response data");
-                "No MD5 hash in response data"
-            })?;
+            let md5_hash = file_item
+                .hashes
+                .iter()
+                .find(|e| e.algo == 2)
+                .ok_or_else(|| {
+                    error!("No MD5 hash in response data");
+                    "No MD5 hash in response data"
+                })?;
 
             if !validate_file(&file_path, md5_hash.value.clone())? {
                 error!("File '{}' failed validation!", file_name);
@@ -464,15 +504,19 @@ async fn get_mod_item(
     // Prepare the GET request to the CurseForge API, inserting the appropriate project and file ID.
     let request = client
         .get(format!(
-            "https://api.curseforge.com/v1/mods/{}/{}",
+            "https://api.curseforge.com/v1/mods/{}/files/{}",
             project_id, file_id
         ))
         .headers(headers);
 
     // Send the request asynchronously and wait for the response.
     let response = request.send().await?;
-    // Parse the JSON response into a ModFileResponse.
-    let data: ModFileResponse = response.json().await?;
+    let response_text = response.text().await?;
+    // Attempt to parse the JSON response into a ModFileResponse.
+    let data: ModFileResponse = serde_json::from_str(&response_text).map_err(|err| {
+        error!("Failed to parse response: {}", err);
+        "Failed to parse response"
+    })?;
 
     // Return the parsed mod file data.
     Ok(data)
