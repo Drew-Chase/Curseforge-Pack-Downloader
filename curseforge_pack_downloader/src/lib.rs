@@ -6,6 +6,7 @@
 use crate::pack_manifest::Manifest;
 use log::{error, info};
 use std::error::Error;
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
 
 mod curseforge_api;
@@ -45,6 +46,32 @@ pub struct CurseforgePackDownloader {
 
     /// This will only attempt to validate files where the file size is less than this value (in bytes)
     validate_if_size_less_than: Option<u64>,
+}
+
+pub struct ProcessProgressResponse {
+    pub stage: ProcessStage,
+    pub progress: f32,
+    pub message: String,
+}
+
+pub enum ProcessStage {
+    ExtractingArchive,
+    DownloadingArchive,
+    DownloadingMods,
+    Finalizing,
+}
+
+impl Display for ProcessStage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            ProcessStage::DownloadingArchive => "Downloading Archive",
+            ProcessStage::DownloadingMods => "Downloading Mods",
+            ProcessStage::Finalizing => "Finalizing",
+            ProcessStage::ExtractingArchive => "Extracting Archive",
+        }
+        .to_string();
+        write!(f, "{}", str)
+    }
 }
 
 impl Default for CurseforgePackDownloader {
@@ -155,9 +182,17 @@ impl CurseforgePackDownloader {
     ///
     /// Returns a `Result` containing the `Manifest` of the processed pack or an error if
     /// processing fails.
-    pub async fn process_id(&self, id: u64) -> Result<Manifest, Box<dyn Error>> {
-        let file = curseforge_api::download_latest_pack_archive(id).await?;
-        self.process_file(file).await
+    pub async fn process_id<F>(&self, id: u64, on_progress: F) -> Result<Manifest, Box<dyn Error>>
+    where
+        F: Fn(ProcessProgressResponse) + 'static + Send + Sync + Copy,
+    {
+        on_progress(ProcessProgressResponse {
+            stage: ProcessStage::DownloadingArchive,
+            progress: 0.0,
+            message: format!("Downloading Archive from curseforge for project: {}", id),
+        });
+        let file = curseforge_api::download_latest_pack_archive(id, &self.temp_directory).await?;
+        self.process_file(file, on_progress).await
     }
 
     /// Processes a mod pack archive from the given file path.
@@ -170,7 +205,14 @@ impl CurseforgePackDownloader {
     ///
     /// Returns a `Result` containing the `Manifest` of the processed pack or an error if
     /// processing fails.
-    pub async fn process_file(&self, file: impl AsRef<Path>) -> Result<Manifest, Box<dyn Error>> {
+    pub async fn process_file<F>(
+        &self,
+        file: impl AsRef<Path>,
+        on_progress: F,
+    ) -> Result<Manifest, Box<dyn Error>>
+    where
+        F: Fn(ProcessProgressResponse) + 'static + Send + Sync + Copy,
+    {
         // Initiate processing of the archive file
         // This function extracts the archive, validates the contents, and downloads needed mods
         let (tmp, manifest) = match pack_archive::process_archive(
@@ -179,7 +221,9 @@ impl CurseforgePackDownloader {
             self.validate,
             self.validate_if_size_less_than,
             &self.temp_directory,
-        ).await
+            on_progress,
+        )
+        .await
         {
             // Continue if processing is successful, store results
             Ok(output) => output,
@@ -190,14 +234,19 @@ impl CurseforgePackDownloader {
         };
 
         // Parse the output directory path using the manifest data
-        let output = self.get_parsed_output(&manifest);
+        let output = Self::get_parsed_path(&self.output_dir, &manifest);
 
         // Define paths for 'mods' and 'overrides' directories within temporary files
-        let mods = tmp.join("mods");
         let overrides = tmp.join("overrides");
 
+        on_progress(ProcessProgressResponse {
+            stage: ProcessStage::Finalizing,
+            progress: 0.75,
+            message: "Finalizing pack".to_string(),
+        });
+
         // Copy contents from 'mods' and 'overrides' directories to the final output location
-        match pack_archive::copy_to_output(mods, overrides, output) {
+        match pack_archive::copy_to_output(overrides, output) {
             // Log successful copy operation
             Ok(output) => {
                 info!("Pack copied to {}", output.display());
@@ -247,14 +296,15 @@ impl CurseforgePackDownloader {
     ///
     /// # Errors
     /// Errors are logged, and default values are used to handle them gracefully.
-    fn get_parsed_output(&self, manifest: &Manifest) -> PathBuf {
+    fn get_parsed_path(path: impl AsRef<Path>, manifest: &Manifest) -> PathBuf {
         use log::error;
         use std::time::{Duration, SystemTime};
+        
+        let path = path.as_ref().to_path_buf();
 
         // Convert the path to a string safely.
         // If the conversion fails, log an error and use an empty string as a fallback.
-        let mut path_string: String = self
-            .output_dir
+        let mut path_string: String = path
             .to_str()
             .unwrap_or_else(|| {
                 error!("Unable to convert path to string");
@@ -266,6 +316,9 @@ impl CurseforgePackDownloader {
         let pack_name = &manifest.name;
         let pack_version = &manifest.version;
         let author = &manifest.author;
+        
+        let pack_version = &pack_version.clone().unwrap_or("".to_string());
+        let author = &author.clone().unwrap_or("".to_string());
 
         // Get the current system time and convert it to milliseconds since the UNIX epoch.
         // If this fails, log an error and use a default of 0 milliseconds.
