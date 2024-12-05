@@ -2,7 +2,7 @@ use log::info;
 use std::collections::HashMap;
 use std::error::Error;
 
-static ENV_FILE: &str = include_str!("../env.ini");
+static ENV_FILE: &str = include_str!("../../env.ini");
 
 #[derive(Debug, Default)]
 pub struct Env {
