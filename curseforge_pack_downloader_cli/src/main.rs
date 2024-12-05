@@ -9,6 +9,7 @@ use curseforge_pack_downloader::CurseforgePackDownloader;
 use log::{error, info, warn};
 use std::env::set_var;
 use std::ffi::OsStr;
+use std::fs::{create_dir_all, remove_dir_all};
 use std::path::PathBuf;
 use std::process::exit;
 
@@ -51,7 +52,23 @@ async fn main() {
     // Set downloader options based on input arguments
     downloader.set_validate(args.validate);
     downloader.set_parallel_downloads(args.parallel_downloads);
-    downloader.set_output_directory(args.output);
+    downloader.set_output_directory(&args.output);
+
+    match create_dir_all(&args.output) {
+        Ok(_) => match remove_dir_all(&args.output) {
+            Ok(_) => {
+                info!("Removed old output directory");
+            }
+            Err(err) => {
+                error!("Unable to remove old output directory: {}", err);
+                exit(1);
+            }
+        },
+        Err(err) => {
+            error!("Invalid output directory: {}", err);
+            exit(1);
+        }
+    };
 
     // Set validation size limit if provided and validation is enabled
     if let Some(validate_if_less_than_bytes) = args.validate_if_size_less_than {
