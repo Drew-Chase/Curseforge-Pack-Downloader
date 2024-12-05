@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Help" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="buildProfileId" value="dev" />
-    <option name="command" value="run -- --help" />
+  <configuration default="false" name="Run File" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="buildProfileId" value="release" />
+    <option name="command" value="run -- --file test.zip" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$/target/dev-env" />
     <envs />
     <option name="emulateTerminal" value="true" />
