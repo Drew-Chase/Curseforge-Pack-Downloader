@@ -16,13 +16,23 @@ use std::iter::Map;
 use std::path::{Path, PathBuf};
 use uri_encode::encode_uri_component;
 
-const API_KEY: &str = r#"$2a$10$qD2UJdpHaeDaQyGGaGS0QeoDnKq2EC7sX6YSjOxYHtDZSQRg04BCG"#;
+macro_rules! header_parsed_api_key {
+    () => {
+        match std::env::var("CURSEFORGE_API_KEY").unwrap_or("".to_string()).parse(){
+            Ok(key) => key,
+            Err(err) => {
+                error!("Failed to parse API key: {}", err);
+                return Err("Failed to parse API key".into());
+            }
+        }
+    };
+}
 
 pub async fn download_latest_pack_archive(project_id: u64) -> Result<PathBuf, Box<dyn Error>> {
     info!("Downloading the latest pack version");
     let client = Client::new();
     let mut headers: HeaderMap = HeaderMap::new();
-    headers.insert("x-api-key", API_KEY.parse().unwrap());
+    headers.insert("x-api-key", header_parsed_api_key!());
 
     let request = client
         .get(format!(
@@ -38,19 +48,25 @@ pub async fn download_latest_pack_archive(project_id: u64) -> Result<PathBuf, Bo
         }
     };
 
-    let data: Vec<Value> = response.get("data").unwrap().as_array().unwrap().to_vec();
-    let latest_file: Value = data.first().unwrap().clone();
+    let data: Vec<Value> = response.get("data")
+                                   .ok_or("Missing 'data' field in response")?
+        .as_array()
+        .ok_or("'data' field is not an array")?
+        .to_vec();
+    let latest_file: Value = data.first()
+                                 .ok_or("No files found in 'data' array")?
+        .clone();
     let download_url: String = latest_file
         .get("downloadUrl")
-        .unwrap()
+        .ok_or("Missing 'downloadUrl' in latest file")?
         .as_str()
-        .unwrap()
+        .ok_or("'downloadUrl' is not a string")?
         .to_string();
     let file_name: String = latest_file
         .get("fileName")
-        .unwrap()
+        .ok_or("Missing 'fileName' in latest file")?
         .as_str()
-        .unwrap()
+        .ok_or("'fileName' is not a string")?
         .to_string();
     let file_path = std::env::temp_dir().join(file_name);
     let mut file = File::create(&file_path)?;
@@ -248,7 +264,7 @@ fn bytes_to_hex_string(bytes: &[u8]) -> String {
 
 pub async fn get_project(project_id: u64, client: &Client) -> Result<ProjectItem, Box<dyn Error>> {
     let mut headers: HeaderMap = HeaderMap::new();
-    headers.insert("x-api-key", API_KEY.parse().unwrap());
+    headers.insert("x-api-key", header_parsed_api_key!());
     let request = client
         .get(format!("https://api.curseforge.com/v1/mods/{}", project_id))
         .headers(headers);
@@ -263,7 +279,7 @@ async fn get_mod_item(
     client: &Client,
 ) -> Result<ModFileResponse, Box<dyn Error>> {
     let mut headers: HeaderMap = HeaderMap::new();
-    headers.insert("x-api-key", API_KEY.parse().unwrap());
+    headers.insert("x-api-key",header_parsed_api_key!());
     let request = client
         .get(format!(
             "https://api.curseforge.com/v1/mods/{}/{}",
