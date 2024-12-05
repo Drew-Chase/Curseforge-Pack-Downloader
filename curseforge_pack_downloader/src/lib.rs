@@ -3,8 +3,11 @@
 #![deny(clippy::panic)]
 #![deny(unused_must_use)]
 
+use crate::curseforge_api::get_project;
+use crate::mod_type::ModType;
 use crate::pack_manifest::Manifest;
 use log::{error, info};
+use reqwest::Client;
 use std::error::Error;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
@@ -191,6 +194,17 @@ impl CurseforgePackDownloader {
             progress: 0.0,
             message: format!("Downloading Archive from curseforge for project: {}", id),
         });
+        let project = get_project(id, &Client::new()).await?;
+        if !project
+            .data
+            .class_id
+            .unwrap_or(ModType::Mod)
+            .eq(&ModType::ModPack)
+        {
+            error!("The project is not a modpack");
+            return Err("The project is not a modpack".into());
+        }
+
         let file = curseforge_api::download_latest_pack_archive(id, &self.temp_directory).await?;
         self.process_file(file, on_progress).await
     }
@@ -299,7 +313,7 @@ impl CurseforgePackDownloader {
     fn get_parsed_path(path: impl AsRef<Path>, manifest: &Manifest) -> PathBuf {
         use log::error;
         use std::time::{Duration, SystemTime};
-        
+
         let path = path.as_ref().to_path_buf();
 
         // Convert the path to a string safely.
@@ -316,7 +330,7 @@ impl CurseforgePackDownloader {
         let pack_name = &manifest.name;
         let pack_version = &manifest.version;
         let author = &manifest.author;
-        
+
         let pack_version = &pack_version.clone().unwrap_or("".to_string());
         let author = &author.clone().unwrap_or("".to_string());
 
