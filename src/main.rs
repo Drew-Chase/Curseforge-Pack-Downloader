@@ -24,18 +24,22 @@ async fn main() {
     let start_time = std::time::SystemTime::now();
     let args = CommandlineArgs::parse();
 
-    std::env::set_var("RUST_LOG", "info");
+    set_var("RUST_LOG", "info");
     env_logger::init();
     info!("Starting unfuck-curseforge");
     warn!("This tool is not affiliated with CurseForge in any way, in fact we strongly dislike curseforge's bullshit!");
 
     match env::Env::new() {
-        Ok(env) => set_var("CURSEFORGE_API", env.CURSEFORGE_API_KEY),
+        Ok(env) => set_var("CURSEFORGE_API_KEY", env.curseforge_api_key),
         Err(err) => {
             error!("Unable to read environment variables from the env.ini file, make sure its filled out before building: {}", err);
             exit(1);
         }
     }
+    
+    println!(
+        "Using CurseForge API Key: {}",
+        std::env::var("CURSEFORGE_API_KEY").unwrap_or("NOT SET".to_string()));
 
     if args.id.is_none() && args.file.is_none() {
         error!("You must specify a url or file to download");

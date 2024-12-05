@@ -6,7 +6,7 @@ static ENV_FILE: &str = include_str!("../env.ini");
 
 #[derive(Debug, Default)]
 pub struct Env {
-    pub CURSEFORGE_API_KEY: String,
+    pub curseforge_api_key: String,
 }
 
 impl Env {
@@ -39,8 +39,8 @@ impl Env {
         let mut env: Env = Env::default();
 
         for (key, value) in kvp {
-            if key.eq_ignore_ascii_case("CURSEFORGE_API_KEY") {
-                env.CURSEFORGE_API_KEY = value;
+            if key.eq_ignore_ascii_case("curseforge_api_key") {
+                env.curseforge_api_key = value;
             }
         }
 
