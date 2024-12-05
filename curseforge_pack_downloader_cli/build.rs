@@ -27,12 +27,12 @@ fn main() {
         .join("../../../..")
         .canonicalize()
         .expect("Failed to canonicalize path");
-    let exe_name = format!("unfuck-curseforge-{}-{}", os, version);
+    let exe_name = format!("curseforge_pack_downloader_cli-{}-{}", os, version);
 
     let original_exe = if os == "windows" {
-        target_dir.join("release/unfuck-curseforge.exe")
+        target_dir.join("release/curseforge_pack_downloader_cli.exe")
     } else {
-        target_dir.join("release/unfuck-curseforge")
+        target_dir.join("release/curseforge_pack_downloader_cli")
     };
     let new_exe = if os == "windows" {
         target_dir.join(format!("release/{}.exe", exe_name))
