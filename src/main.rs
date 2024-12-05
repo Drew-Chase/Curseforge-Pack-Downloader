@@ -1,16 +1,23 @@
+#![deny(clippy::unwrap_used)]
+#![deny(clippy::expect_used)]
+#![deny(clippy::panic)]
+#![deny(unused_must_use)]
+
 use crate::commandline_args::CommandlineArgs;
 use clap::Parser;
 use log::{error, info, warn};
+use std::env::set_var;
 use std::path::PathBuf;
 use std::process::exit;
 
 mod commandline_args;
 mod curseforge_api;
+mod env;
+mod mod_file;
+mod mod_type;
 mod pack_archive;
 mod pack_manifest;
-mod mod_type;
 mod project_structure;
-mod mod_file;
 
 #[tokio::main]
 async fn main() {
@@ -21,6 +28,14 @@ async fn main() {
     env_logger::init();
     info!("Starting unfuck-curseforge");
     warn!("This tool is not affiliated with CurseForge in any way, in fact we strongly dislike curseforge's bullshit!");
+
+    match env::Env::new() {
+        Ok(env) => set_var("CURSEFORGE_API", env.CURSEFORGE_API_KEY),
+        Err(err) => {
+            error!("Unable to read environment variables from the env.ini file, make sure its filled out before building: {}", err);
+            exit(1);
+        }
+    }
 
     if args.id.is_none() && args.file.is_none() {
         error!("You must specify a url or file to download");
@@ -44,14 +59,20 @@ async fn main() {
         file = Some(PathBuf::from(file_string));
     }
     if let Some(file) = file {
-        let (tmp, manifest) = match pack_archive::process_archive(file, args.parallel_downloads, args.validate,args.validate_if_size_less_than).await {
+        let (tmp, manifest) = match pack_archive::process_archive(
+            file,
+            args.parallel_downloads,
+            args.validate,
+            args.validate_if_size_less_than,
+        )
+        .await
+        {
             Ok(output) => output,
             Err(err) => {
                 error!("Unable to process the pack archive: {}", err);
                 exit(1);
             }
         };
-
 
         let mods = tmp.join("mods");
         let overrides = tmp.join("overrides");
@@ -60,10 +81,14 @@ async fn main() {
             let output_path = output_path.join(format!(
                 "{}-{}",
                 manifest.name,
-                std::time::SystemTime::now()
-                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis()
+                match std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)
+                {
+                    Ok(duration) => duration.as_millis(),
+                    Err(err) => {
+                        error!("Unable to get current time: {}", err);
+                        0
+                    }
+                }
             ));
             match pack_archive::copy_to_output(mods, overrides, output_path) {
                 Ok(output) => {
@@ -80,6 +105,9 @@ async fn main() {
     }
 
     let end_time = std::time::SystemTime::now();
-    let duration = end_time.duration_since(start_time).unwrap();
+    let duration = end_time.duration_since(start_time).unwrap_or_else(|err| {
+        error!("Unable to get current time: {}", err);
+        std::time::Duration::new(0, 0)
+    });
     info!("Finished in {} seconds", duration.as_secs());
 }
