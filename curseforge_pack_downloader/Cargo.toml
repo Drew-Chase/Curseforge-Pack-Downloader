@@ -1,0 +1,14 @@
+[package]
+name = "curseforge_pack_downloader"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+log = "0.4.22"
+reqwest = { version = "0.12.9", features = ["json"] }
+serde = { version = "1.0.215", features = ["derive"] }
+serde_json = { version = "1.0.133" }
+zip = { version = "2.2.1" }
+futures = "0.3.31"
+md-5 = { version = "0.11.0-pre.4" }
+uri_encode = {version = "1.0.2"}
