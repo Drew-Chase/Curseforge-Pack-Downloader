@@ -1,8 +1,8 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Help" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="buildProfileId" value="dev" />
-    <option name="command" value="run -- --help" />
-    <option name="workingDirectory" value="file://$PROJECT_DIR$/target/dev-env" />
+  <configuration default="false" name="Run File (CLI)" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="buildProfileId" value="release" />
+    <option name="command" value="run --package curseforge_pack_downloader_cli -- --file test.zip" />
+    <option name="workingDirectory" value="file://$PROJECT_DIR$/dev-env" />
     <envs />
     <option name="emulateTerminal" value="true" />
     <option name="channel" value="DEFAULT" />
