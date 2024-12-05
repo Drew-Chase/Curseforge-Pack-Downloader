@@ -1,4 +1,5 @@
 use crate::pack_manifest::Manifest;
+use crate::{ProcessProgressResponse, ProcessStage};
 use log::error;
 use std::error::Error;
 use std::fs;
@@ -28,13 +29,23 @@ use std::path::{Path, PathBuf};
 /// # Errors
 /// - Will log an error and exit the process if the zip extraction fails or if the manifest file is not found.
 /// - Will log an error, remove the mods directory, and exit the process if downloading mods fails.
-pub async fn process_archive(
+pub async fn process_archive<F>(
     zip_path: impl AsRef<Path>,
     parallel: u8,
     validate: bool,
     validate_if_size_less_than: Option<u64>,
     temp_dir: impl AsRef<Path>,
-) -> Result<(PathBuf, Manifest), Box<dyn Error>> {
+    mut on_progress: F,
+) -> Result<(PathBuf, Manifest), Box<dyn Error>>
+where
+    F: FnMut(ProcessProgressResponse) + 'static + Send + Sync,
+{
+    on_progress(ProcessProgressResponse {
+        stage: ProcessStage::ExtractingArchive,
+        progress: 0.1f32,
+        message: "Extracting pack archive".to_string(),
+    });
+
     // Attempt to extract the zip archive into a temporary directory.
     // The `extract_zip` function returns a `Result` containing
     // the path to the extracted files or an error if the extraction fails.
@@ -65,7 +76,24 @@ pub async fn process_archive(
 
     // Attempt to download mods based on the information in the manifest.
     if let Err(e) = manifest
-        .download_mods(&path, parallel, validate, validate_if_size_less_than)
+        .download_mods(
+            &path,
+            parallel,
+            validate,
+            validate_if_size_less_than,
+            move |progress| {
+                let mods_downloaded_percentage: f32 =
+                    progress.downloaded as f32 / progress.total as f32;
+                on_progress(ProcessProgressResponse {
+                    stage: ProcessStage::DownloadingMods,
+                    message: format!(
+                        "Downloading {} of {} mods",
+                        progress.downloaded, progress.total
+                    ),
+                    progress: (0.75f32 + mods_downloaded_percentage) / 1.2f32,
+                })
+            },
+        )
         .await
     {
         // Attempt to remove the mods directory if downloading fails.
@@ -108,13 +136,11 @@ fn extract_zip(
 
 /// Copies files from mod and override directories to an output directory.
 /// Parameters:
-/// - `mods_dir`: The directory containing mod files.
 /// - `overrides_dir`: The directory containing override files.
 /// - `output_path`: The directory where files will be copied to.
 ///
 /// Returns a `Result` with the path to the output directory or an error.
 pub fn copy_to_output(
-    mods_dir: impl AsRef<Path>,
     overrides_dir: impl AsRef<Path>,
     output_path: impl AsRef<Path>,
 ) -> Result<PathBuf, Box<dyn Error>> {
@@ -124,9 +150,6 @@ pub fn copy_to_output(
     // Create a directory for mods inside the output directory.
     let new_mods = output_path.as_ref().join("mods");
     fs::create_dir_all(&new_mods)?;
-
-    // Recursively copy the mods directory.
-    copy_dir_recursive(mods_dir, &new_mods)?;
 
     // Recursively copy the overrides directory, if it exists.
     if overrides_dir.as_ref().exists() {
