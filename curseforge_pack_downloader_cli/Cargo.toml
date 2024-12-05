@@ -12,3 +12,7 @@ clap = { version = "4.5.21", features = ["derive", "wrap_help", "help", "usage",
 tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread"] }
 include_dir = { version = "0.7.4" }
 curseforge_pack_downloader = { path = "../curseforge_pack_downloader" }
+
+[profile.release]
+lto = "thin"
+opt-level = "z"
