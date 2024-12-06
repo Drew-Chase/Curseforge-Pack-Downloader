@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="RemoteTargetsManager">
+    <targets>
+      <target name="WSL - Ubuntu-22.04" type="wsl" uuid="29af45c3-622c-438c-a5b6-533c55ddbe04">
+        <config>
+          <option name="distributionMsId" value="Ubuntu-22.04" />
+          <option name="projectRootOnTarget" value="{exitCode=0, timeout=false, cancelled=false, stdout=/tmp/tmp.9fBsfYhZwM&#10;, stderr=}/Curseforge-Pack-Downloader" />
+        </config>
+        <ContributedStateBase type="RsLanguageRuntime">
+          <config>
+            <option name="cargoPath" value="/home/drew/.cargo/bin/cargo" />
+            <option name="cargoVersion" value="1.83.0 (5ffbef321 2024-10-29)" />
+            <option name="rustcPath" value="/home/drew/.cargo/bin/rustc" />
+            <option name="rustcVersion" value="error: couldn't read  --version: No such file or directory (os error 2)" />
+          </config>
+        </ContributedStateBase>
+      </target>
+    </targets>
+  </component>
+</project>
