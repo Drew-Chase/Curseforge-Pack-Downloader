@@ -90,7 +90,7 @@ where
                         "Downloading {} of {} mods",
                         progress.downloaded, progress.total
                     ),
-                    progress: (0.75f32 + mods_downloaded_percentage) / 1.2f32,
+                    progress: (0.25f32 + mods_downloaded_percentage) / 1.25f32,
                 })
             },
         )
