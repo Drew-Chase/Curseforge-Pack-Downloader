@@ -8,6 +8,7 @@ use crate::mod_type::ModType;
 use crate::pack_manifest::Manifest;
 use log::{error, info};
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
@@ -51,12 +52,16 @@ pub struct CurseforgePackDownloader {
     validate_if_size_less_than: Option<u64>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ProcessProgressResponse {
     pub stage: ProcessStage,
     pub progress: f32,
     pub message: String,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub enum ProcessStage {
     ExtractingArchive,
     DownloadingArchive,
@@ -187,7 +192,7 @@ impl CurseforgePackDownloader {
     /// processing fails.
     pub async fn process_id<F>(&self, id: u64, on_progress: F) -> Result<Manifest, Box<dyn Error>>
     where
-        F: Fn(ProcessProgressResponse) + 'static + Send + Sync + Copy,
+        F: Fn(ProcessProgressResponse) + 'static + Send + Sync,
     {
         on_progress(ProcessProgressResponse {
             stage: ProcessStage::DownloadingArchive,
@@ -225,7 +230,7 @@ impl CurseforgePackDownloader {
         on_progress: F,
     ) -> Result<Manifest, Box<dyn Error>>
     where
-        F: Fn(ProcessProgressResponse) + 'static + Send + Sync + Copy,
+        F: Fn(ProcessProgressResponse) + 'static + Send + Sync,
     {
         // Initiate processing of the archive file
         // This function extracts the archive, validates the contents, and downloads needed mods
@@ -252,12 +257,6 @@ impl CurseforgePackDownloader {
 
         // Define paths for 'mods' and 'overrides' directories within temporary files
         let overrides = tmp.join("overrides");
-
-        on_progress(ProcessProgressResponse {
-            stage: ProcessStage::Finalizing,
-            progress: 0.75,
-            message: "Finalizing pack".to_string(),
-        });
 
         // Copy contents from 'mods' and 'overrides' directories to the final output location
         match pack_archive::copy_to_output(overrides, output) {
