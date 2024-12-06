@@ -1,0 +1,33 @@
+{
+	"$schema": "https://schema.tauri.app/config/2",
+	"productName": "curseforge-pack-downloader-app",
+	"version": "0.0.1",
+	"identifier": "chase.minecraft.rust.curseforge-pack-downloader",
+	"build": {
+		"beforeDevCommand": "pnpm dev",
+		"devUrl": "http://localhost:1420",
+		"beforeBuildCommand": "pnpm build",
+		"frontendDist": "../dist"
+	},
+	"app": {
+		"windows": [
+			{
+				"title": "Curseforge Pack Downloader",
+				"width": 1280,
+				"height": 720,
+				"minWidth": 650,
+				"minHeight": 450
+			}
+		],
+		"security": {
+			"csp": null
+		}
+	},
+	"bundle": {
+		"active": true,
+		"targets": "all",
+		"icon": [
+			"icons/icon.ico"
+		]
+	}
+}
