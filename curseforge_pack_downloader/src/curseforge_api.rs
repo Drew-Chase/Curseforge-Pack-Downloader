@@ -2,6 +2,7 @@ use crate::mod_file::ModFileResponse;
 use crate::mod_type::{ModType, ModTypeExt};
 use crate::pack_manifest::Manifest;
 use crate::project_structure::ProjectItem;
+use crate::modpack_version_file::ModpackVersionFile;
 use futures::future;
 use log::{error, info, warn};
 use md5::{Digest, Md5};
@@ -74,6 +75,7 @@ macro_rules! header_parsed_api_key {
 /// ```
 pub async fn download_latest_pack_archive(
     project_id: u64,
+    file_id: Option<u64>,
     temp_dir: impl AsRef<Path>,
 ) -> Result<PathBuf, Box<dyn Error>> {
     info!("Downloading the latest pack version");
@@ -111,10 +113,16 @@ pub async fn download_latest_pack_archive(
         .to_vec();
 
     // Retrieve the first file in the 'data' array as the latest file
-    let latest_file: Value = data
-        .first()
-        .ok_or("No files found in 'data' array")?
-        .clone();
+    let latest_file: &Value = data
+        .iter()
+        .find(|file| {
+            let id = file.get("id").and_then(Value::as_u64).unwrap_or(0);
+            if let Some(file_id) = file_id {
+                return id == file_id;
+            }
+            true
+        })
+        .ok_or("Failed to find a suitable file.")?;
 
     // Extract the download URL and file name from the latest file
     let download_url: String = latest_file
@@ -130,7 +138,7 @@ pub async fn download_latest_pack_archive(
         .as_str()
         .ok_or("'fileName' is not a string")?
         .to_string();
-    
+
     create_dir_all(temp_dir.as_ref())?;
 
     // Determine the path to save the downloaded file
@@ -520,4 +528,22 @@ async fn get_mod_item(
 
     // Return the parsed mod file data.
     Ok(data)
+}
+
+pub async fn get_pack_versions(project_id: u64) -> Result<Vec<ModpackVersionFile>, Box<dyn Error>> {
+    let url = format!("https://api.curseforge.com/v1/mods/{}/files", project_id);
+    let client = Client::new();
+    let mut headers: HeaderMap = HeaderMap::new();
+    headers.insert("x-api-key", header_parsed_api_key!());
+    let request = client.get(url).headers(headers);
+
+    let response = request.send().await?;
+    let response_json: Value = response.json().await?;
+    let files: Vec<ModpackVersionFile> = serde_json::from_value(
+        response_json
+            .get("data")
+            .ok_or("Missing 'data' field in response")?
+            .clone(),
+    )?;
+    Ok(files)
 }
