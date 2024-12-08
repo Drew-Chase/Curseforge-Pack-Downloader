@@ -13,12 +13,13 @@ use std::error::Error;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 
-mod curseforge_api;
-mod mod_file;
-mod mod_type;
-mod pack_archive;
-mod pack_manifest;
-mod project_structure;
+pub mod curseforge_api;
+pub mod mod_file;
+pub mod mod_type;
+pub mod pack_archive;
+pub mod pack_manifest;
+pub mod project_structure;
+pub mod modpack_version_file;
 
 /// This module contains types and functionalities related to processing and downloading
 /// Curseforge mod packs. It includes a structure `CurseforgePackDownloader` which
@@ -50,6 +51,7 @@ pub struct CurseforgePackDownloader {
 
     /// This will only attempt to validate files where the file size is less than this value (in bytes)
     validate_if_size_less_than: Option<u64>,
+    pack_version: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -102,6 +104,7 @@ impl CurseforgePackDownloader {
             validate: false,
             parallel_downloads: 16,
             validate_if_size_less_than: None,
+            pack_version: None,
         }
     }
 
@@ -180,6 +183,11 @@ impl CurseforgePackDownloader {
         self
     }
 
+    pub fn set_pack_version(&mut self, pack_version: u64) -> &mut Self {
+        self.pack_version = Some(pack_version);
+        self
+    }
+
     /// Downloads and processes the mod pack archive for the given mod pack ID.
     ///
     /// # Parameters
@@ -210,7 +218,12 @@ impl CurseforgePackDownloader {
             return Err("The project is not a modpack".into());
         }
 
-        let file = curseforge_api::download_latest_pack_archive(id, &self.temp_directory).await?;
+        let file = curseforge_api::download_latest_pack_archive(
+            id,
+            self.pack_version,
+            &self.temp_directory,
+        )
+        .await?;
         self.process_file(file, on_progress).await
     }
 
