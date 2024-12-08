@@ -126,11 +126,11 @@ export default function Home()
                                 iconUrl={item.logo.thumbnailUrl}
                                 gameVersion={item.latestFilesIndexes[0].gameVersion}
                                 websiteUrl={item.links.websiteUrl}
-                                onUnpack={async path =>
+                                onUnpack={async (path, fileId) =>
                                 {
                                     try
                                     {
-                                        await unpack_modpack(item.id, path, setUnpackProgress);
+                                        await unpack_modpack(item.id, fileId, path, setUnpackProgress);
                                     } catch
                                     {
                                         console.error("Failed to unpack modpack.");
