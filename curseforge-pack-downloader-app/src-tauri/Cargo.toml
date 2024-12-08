@@ -1,6 +1,6 @@
 [package]
 name = "curseforge-pack-downloader-app"
-version = "1.0.1"
+version = "1.0.2"
 description = "The CurseForge Pack Downloader App is a cross-platform tool built with Tauri. It allows users to download and manage Minecraft mod packs directly from CurseForge, providing a seamless and user-friendly interface."
 authors = ["you"]
 edition = "2021"

@@ -746,7 +746,7 @@ dependencies = [
 
 [[package]]
 name = "curseforge-pack-downloader-app"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "curseforge_pack_downloader",
  "env_logger",
@@ -762,7 +762,7 @@ dependencies = [
 
 [[package]]
 name = "curseforge_pack_downloader"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "futures",
  "log",
