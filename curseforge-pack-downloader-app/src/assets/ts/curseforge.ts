@@ -31,12 +31,13 @@ export async function search_modpacks(query: string): Promise<ModSearchResult>
     return {} as ModSearchResult;
 }
 
-export async function unpack_modpack(id: number, path: string, callback: (progress: ProcessProgressResponse) => void): Promise<void>
+export async function unpack_modpack(id: number, pack_version: number, path: string, callback: (progress: ProcessProgressResponse) => void): Promise<void>
 {
     const downloadEvent = new Channel<ProcessProgressResponse>();
     downloadEvent.onmessage = callback;
-    await invoke("unpack", {id: id, output: path, onEvent: downloadEvent});
+    await invoke("unpack", {id: id, packVersion: pack_version, output: path, onEvent: downloadEvent});
 }
+
 export async function unpack_modpack_file(file: string, path: string, callback: (progress: ProcessProgressResponse) => void): Promise<void>
 {
     const downloadEvent = new Channel<ProcessProgressResponse>();
