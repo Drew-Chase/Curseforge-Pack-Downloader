@@ -32,7 +32,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             curseforge_api::search_modpacks,
             curseforge_api::unpack,
-            curseforge_api::unpack_file
+            curseforge_api::unpack_file,
+            curseforge_api::get_pack_versions,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

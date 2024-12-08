@@ -1,3 +1,4 @@
+use curseforge_pack_downloader::modpack_version_file::ModpackVersionFile;
 use curseforge_pack_downloader::ProcessProgressResponse;
 use log::{error, info};
 use reqwest::header::HeaderMap;
@@ -51,6 +52,7 @@ pub async fn search_modpacks(query: String) -> Result<String, String> {
 #[tauri::command]
 pub async fn unpack(
     id: u64,
+    pack_version: u64,
     output: String,
     on_event: Channel<ProcessProgressResponse>,
 ) -> Result<(), String> {
@@ -60,6 +62,7 @@ pub async fn unpack(
     downloader.set_temp_directory(PathBuf::from(output).join("temp"));
     downloader.set_validate(true);
     downloader.set_validate_if_size_less_than(10000);
+    downloader.set_pack_version(pack_version);
 
     match downloader
         .process_id(id, move |e| {
@@ -84,7 +87,6 @@ pub async fn unpack_file(
     downloader.set_temp_directory(PathBuf::from(output).join("temp"));
     downloader.set_validate(true);
 
-
     match downloader
         .process_file(file, move |e| {
             on_event.send(e).unwrap();
@@ -94,4 +96,11 @@ pub async fn unpack_file(
         Ok(_) => Ok(()),
         Err(e) => Err(e.to_string()),
     }
+}
+
+#[tauri::command]
+pub async fn get_pack_versions(id: u64) -> Result<Vec<ModpackVersionFile>, String> {
+    curseforge_pack_downloader::curseforge_api::get_pack_versions(id)
+        .await
+        .map_err(|e| e.to_string())
 }
